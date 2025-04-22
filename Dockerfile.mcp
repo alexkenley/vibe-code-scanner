@@ -55,8 +55,11 @@ RUN pip install --no-cache-dir flake8 bandit
 # Copy application code
 COPY . .
 
-# Expose the port the app runs on
-EXPOSE 8000
+# Install Node.js dependencies
+RUN npm install
 
-# Command to run the server
-CMD ["python", "server.py", "--host", "0.0.0.0", "--port", "8000"]
+# Expose the port the MCP server runs on
+EXPOSE 7654
+
+# Command to run the MCP server
+CMD ["node", "standard_mcp.js"]

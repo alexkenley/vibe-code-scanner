@@ -1,0 +1,6 @@
+# Core scanning dependencies
+flake8==6.1.0
+bandit==1.7.5
+pylint==3.0.2
+safety==2.3.5
+gitpython==3.1.40

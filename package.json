@@ -6,12 +6,14 @@
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "cors": "^2.8.5",
-    "express": "^5.1.0",
+    "express": "^4.18.2",
     "retire": "^4.3.2",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "body-parser": "^1.20.2"
   },
-  "main": ".eslintrc.js",
+  "main": "standard_mcp.js",
   "scripts": {
+    "start": "node standard_mcp.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

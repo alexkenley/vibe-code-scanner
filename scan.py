@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
+import threading
 from urllib.parse import urlparse
 from datetime import datetime
 from license_scanner import LicenseScanner
