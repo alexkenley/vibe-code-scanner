@@ -3,9 +3,26 @@
   "version": "1.0.0",
   "description": "Security and best practices scanner",
   "dependencies": {
-    "typescript": "^5.0.0",
-    "@typescript-eslint/parser": "^6.21.0",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "retire": "^4.3.2"
-  }
+    "@typescript-eslint/parser": "^6.21.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "retire": "^4.3.2",
+    "typescript": "^5.0.0"
+  },
+  "main": ".eslintrc.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexkenley/vibe-code-scanner.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/alexkenley/vibe-code-scanner/issues"
+  },
+  "homepage": "https://github.com/alexkenley/vibe-code-scanner#readme"
 }

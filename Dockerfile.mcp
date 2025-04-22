@@ -1,0 +1,62 @@
+FROM python:3.10-slim
+
+LABEL maintainer="Vibe Code Scanner Team"
+LABEL description="Docker image for Vibe Code Scanner MCP Server"
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    gnupg \
+    lsb-release \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js and npm
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g retire
+
+# Install Go
+RUN curl -OL https://golang.org/dl/go1.19.linux-amd64.tar.gz \
+    && tar -C /usr/local -xzf go1.19.linux-amd64.tar.gz \
+    && rm go1.19.linux-amd64.tar.gz
+ENV PATH=$PATH:/usr/local/go/bin
+
+# Install Go tools
+RUN go install github.com/securego/gosec/v2/cmd/gosec@latest \
+    && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+ENV PATH=$PATH:/root/go/bin
+
+# Install Ruby and tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ruby \
+    ruby-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && gem install rubocop brakeman
+
+# Create and set working directory
+WORKDIR /app
+
+# Copy requirements files
+COPY requirements.txt requirements-server.txt ./
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir -r requirements-server.txt
+
+# Install Python tools
+RUN pip install --no-cache-dir flake8 bandit
+
+# Copy application code
+COPY . .
+
+# Expose the port the app runs on
+EXPOSE 8000
+
+# Command to run the server
+CMD ["python", "server.py", "--host", "0.0.0.0", "--port", "8000"]

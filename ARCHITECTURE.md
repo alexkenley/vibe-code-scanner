@@ -82,6 +82,75 @@ Direct execution of `scan.py` on the host system is not recommended and will lik
     *   Handles edge cases like missing tools or empty results.
     *   Focuses on preserving complete, unmodified tool outputs for maximum utility.
 
+## MCP Server Integration
+
+### Overview
+
+Vibe Code Scanner now supports integration with AI coding assistants through the Model Context Protocol (MCP). This integration allows AI assistants to directly trigger code scans and analyze the results, providing a seamless experience for users.
+
+### Architecture Options
+
+#### 1. Native MCP Server
+
+The native MCP server is a Node.js HTTP server that implements the Model Context Protocol and acts as a bridge between AI assistants and the Vibe Code Scanner.
+
+**Components:**
+- **HTTP Server:** A lightweight Node.js server (`basic_mcp.js`) that listens on `127.0.0.1:7654`.
+- **Endpoint Handlers:**
+  - `/` - Health check endpoint
+  - `/sse` - Server-Sent Events endpoint required by the MCP protocol
+  - `/tools` - Endpoint that exposes available tools (scanProject)
+  - `/tools/scanProject` - Tool implementation that runs the Python scanner
+
+**Data Flow:**
+1. AI assistant connects to the MCP server via the `/sse` endpoint.
+2. AI assistant discovers available tools via the `/tools` endpoint.
+3. AI assistant triggers a scan by calling the `/tools/scanProject` endpoint with a project path.
+4. MCP server spawns a Python process to run `scan.py` on the specified project.
+5. Scan results are captured and returned to the AI assistant.
+
+**Benefits:**
+- Simpler setup for most users
+- Direct access to the local filesystem
+- Lower resource usage
+- No Docker dependency
+
+#### 2. Docker-Based MCP Server
+
+The Docker-based approach runs the MCP server inside a container, ensuring all dependencies are pre-installed and isolated.
+
+**Components:**
+- **Docker Container:** Built from `Dockerfile.mcp` with all required dependencies.
+- **MCP Server:** Same Node.js server as the native approach, but running inside the container.
+- **Volume Mounting:** The host filesystem is mounted into the container to allow scanning local projects.
+
+**Data Flow:**
+1. User starts the Docker container with port 7654 exposed.
+2. AI assistant connects to the MCP server running in the container.
+3. When a scan is triggered, the container accesses the mounted filesystem to scan the project.
+4. Results are returned through the container's network interface to the AI assistant.
+
+**Benefits:**
+- Consistent environment across all platforms
+- Pre-installed dependencies
+- Isolation from the host system
+- Matches the existing Docker-based execution model
+
+### Security Considerations
+
+- The MCP server binds only to `127.0.0.1` to prevent external access.
+- No sensitive data is stored or transmitted by the MCP server.
+- The server has read-only access to the files it scans.
+- For the Docker-based approach, proper volume mounting ensures the container only has access to the directories explicitly shared by the user.
+
+### Future Enhancements
+
+- Support for additional MCP tools beyond basic scanning
+- Enhanced error reporting and logging
+- Configuration options for the MCP server (port, binding address, etc.)
+- Authentication for multi-user environments
+- Integration with CI/CD pipelines through the MCP interface
+
 ## Data Flow
 
 1.  User executes one of the following:
