@@ -1428,7 +1428,13 @@ def run_tools(project_path, language):
     print(f"Results written to: {JSON_REPORT_FILENAME}")
     
     # Exit with return code 0 if no issues were found, 1 otherwise
-    if any(issue["returncode"] != 0 for issue in results.values()):
+    has_errors = False
+    for result in results.values():
+        if isinstance(result, dict) and "returncode" in result and result["returncode"] != 0:
+            has_errors = True
+            break
+    
+    if has_errors:
         sys.exit(1)
     else:
         sys.exit(0)
