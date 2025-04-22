@@ -138,6 +138,207 @@ def _run_command_and_capture(command, cwd):
         logger.error(f"ERROR: Failed to run command: {e}")
         return {"stdout": None, "stderr": str(e), "returncode": -1}
 
+# --- Tool Execution Functions ---
+
+def run_eslint(project_path, js_files=None):
+    """Run ESLint on JavaScript/TypeScript files."""
+    print("Running ESLint...")
+    
+    # Create output directory if it doesn't exist
+    output_dir = os.path.join(project_path, "reports")
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Output file for raw ESLint results
+    output_file = os.path.join(output_dir, "raw_eslint_output.txt")
+    
+    # Determine files to scan
+    if not js_files:
+        js_files = find_files_by_extension(project_path, [".js", ".jsx", ".ts", ".tsx"])
+    
+    if not js_files:
+        return {"stdout": "No JavaScript/TypeScript files found.", "stderr": None, "returncode": 0, "raw_output_file": output_file}
+    
+    # Build ESLint command
+    eslint_cmd = ["npx", "eslint", "--no-eslintrc", "--config", os.path.join(os.path.dirname(os.path.abspath(__file__)), ".eslintrc.js")]
+    eslint_cmd.extend(js_files)
+    
+    # Run ESLint
+    result = _run_command_and_capture(eslint_cmd, project_path)
+    
+    # Write output to file
+    with open(output_file, "w", encoding="utf-8") as f:
+        if result["stdout"]:
+            f.write(result["stdout"])
+        if result["stderr"]:
+            f.write("\n\nErrors:\n" + result["stderr"])
+    
+    # Parse issues from ESLint output
+    issues = []
+    if result["stdout"]:
+        lines = result["stdout"].split("\n")
+        current_file = None
+        
+        for line in lines:
+            # Check for file path at the beginning of a line
+            if line and not line.startswith(" "):
+                current_file = line.split("\n")[0]
+            # Check for error/warning lines
+            elif line.strip().startswith(("error", "warning")):
+                parts = line.strip().split("  ")
+                if len(parts) >= 2:
+                    severity = "high" if parts[0] == "error" else "medium"
+                    message = parts[1]
+                    
+                    # Extract line and column if available
+                    line_col = parts[0].split(":")[0] if ":" in parts[0] else "0:0"
+                    line_num, col = map(int, line_col.split(":"))
+                    
+                    issues.append({
+                        "file": current_file,
+                        "line": line_num,
+                        "column": col,
+                        "message": message,
+                        "severity": severity,
+                        "tool": "eslint"
+                    })
+    
+    # Add issues to result
+    result["issues"] = issues
+    result["raw_output_file"] = output_file
+    
+    return result
+
+def run_typescript_check(project_path):
+    """Run TypeScript compiler check."""
+    print("Running TypeScript compiler check...")
+    
+    # Create output directory if it doesn't exist
+    output_dir = os.path.join(project_path, "reports")
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Output file for raw TypeScript results
+    output_file = os.path.join(output_dir, "raw_typescript_output.txt")
+    
+    # Check if tsconfig.json exists
+    tsconfig_path = os.path.join(project_path, "tsconfig.json")
+    if not os.path.exists(tsconfig_path):
+        # Create a minimal tsconfig.json for the check
+        minimal_tsconfig = {
+            "compilerOptions": {
+                "target": "es2016",
+                "module": "commonjs",
+                "esModuleInterop": True,
+                "forceConsistentCasingInFileNames": True,
+                "strict": True,
+                "skipLibCheck": True
+            }
+        }
+        with open(tsconfig_path, "w") as f:
+            json.dump(minimal_tsconfig, f, indent=2)
+    
+    # Run TypeScript compiler check
+    tsc_cmd = ["npx", "tsc", "--noEmit"]
+    result = _run_command_and_capture(tsc_cmd, project_path)
+    
+    # Write output to file
+    with open(output_file, "w", encoding="utf-8") as f:
+        if result["stdout"]:
+            f.write(result["stdout"])
+        if result["stderr"]:
+            f.write("\n\nErrors:\n" + result["stderr"])
+    
+    # Parse issues from TypeScript output
+    issues = []
+    if result["stderr"]:
+        lines = result["stderr"].split("\n")
+        
+        for line in lines:
+            if ":" in line and "error TS" in line:
+                parts = line.split(":")
+                if len(parts) >= 3:
+                    file_path = parts[0]
+                    line_num = int(parts[1])
+                    col = int(parts[2].split("(")[0].strip())
+                    message = ":".join(parts[3:]).strip()
+                    
+                    issues.append({
+                        "file": file_path,
+                        "line": line_num,
+                        "column": col,
+                        "message": message,
+                        "severity": "high",
+                        "tool": "typescript"
+                    })
+    
+    # Add issues to result
+    result["issues"] = issues
+    result["raw_output_file"] = output_file
+    
+    return result
+
+def run_retirejs(project_path):
+    """Run RetireJS to check for vulnerable JavaScript dependencies."""
+    print("Running RetireJS...")
+    
+    # Create output directory if it doesn't exist
+    output_dir = os.path.join(project_path, "reports")
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Output file for raw RetireJS results
+    output_file = os.path.join(output_dir, "raw_retirejs_output.txt")
+    
+    # Run RetireJS
+    retire_cmd = ["retire", "--path", project_path, "--outputformat", "json"]
+    result = _run_command_and_capture(retire_cmd, project_path)
+    
+    # Write output to file
+    with open(output_file, "w", encoding="utf-8") as f:
+        if result["stdout"]:
+            f.write(result["stdout"])
+        if result["stderr"]:
+            f.write("\n\nErrors:\n" + result["stderr"])
+    
+    # Parse issues from RetireJS output
+    issues = []
+    if result["stdout"]:
+        try:
+            retire_data = json.loads(result["stdout"])
+            for data in retire_data:
+                file_path = data.get("file", "")
+                for result in data.get("results", []):
+                    component = result.get("component", "")
+                    version = result.get("version", "")
+                    
+                    for vuln in result.get("vulnerabilities", []):
+                        severity = vuln.get("severity", "medium")
+                        if severity not in ["low", "medium", "high"]:
+                            severity = "medium"
+                        
+                        issues.append({
+                            "file": file_path,
+                            "line": 0,
+                            "column": 0,
+                            "message": f"{component} {version} has vulnerability: {vuln.get('identifiers', {}).get('summary', 'Unknown vulnerability')}",
+                            "severity": severity,
+                            "tool": "retirejs"
+                        })
+        except json.JSONDecodeError:
+            # If JSON parsing fails, create a generic issue
+            issues.append({
+                "file": "package.json",
+                "line": 0,
+                "column": 0,
+                "message": "RetireJS found potential vulnerabilities but couldn't parse the output",
+                "severity": "medium",
+                "tool": "retirejs"
+            })
+    
+    # Add issues to result
+    result["issues"] = issues
+    result["raw_output_file"] = output_file
+    
+    return result
+
 # --- Core Logic Functions ---
 
 def detect_language(project_path, specified_language):
