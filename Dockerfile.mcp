@@ -28,8 +28,8 @@ RUN curl -OL https://golang.org/dl/go1.19.linux-amd64.tar.gz \
 ENV PATH=$PATH:/usr/local/go/bin
 
 # Install Go tools
-RUN go install github.com/securego/gosec/v2/cmd/gosec@latest \
-    && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+RUN go install github.com/securego/gosec/v2/cmd/gosec@v2.18.0 \
+    && go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.55.2
 ENV PATH=$PATH:/root/go/bin
 
 # Install Ruby and tools
