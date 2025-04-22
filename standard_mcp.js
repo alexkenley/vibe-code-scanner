@@ -58,7 +58,7 @@ app.get('/tools', (req, res) => {
             },
             language: {
               type: 'string',
-              description: 'Optional language to scan (python, javascript, typescript, go, ruby, nextjs, node)'
+              description: 'Optional language to scan (python, javascript, typescript, ruby, nextjs, node)'
             }
           },
           required: ['projectPath']
@@ -84,7 +84,7 @@ app.get('/tools', (req, res) => {
             },
             language: {
               type: 'string',
-              description: 'Optional language to scan (python, javascript, typescript, go, ruby, nextjs, node)'
+              description: 'Optional language to scan (python, javascript, typescript, ruby, nextjs, node)'
             }
           },
           required: ['repoUrl']

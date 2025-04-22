@@ -17,7 +17,7 @@ from datetime import datetime
 from license_scanner import LicenseScanner
 
 # Supported languages (lowercase)
-SUPPORTED_LANGUAGES = ["python", "javascript", "typescript", "go", "ruby", "nextjs", "node"]
+SUPPORTED_LANGUAGES = ["python", "javascript", "typescript", "ruby", "nextjs", "node"]
 JSON_REPORT_FILENAME = "vibe_scan_report.json"
 LOG_FILENAME = "vibe_scan_log.txt"
 
