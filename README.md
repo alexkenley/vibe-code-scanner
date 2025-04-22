@@ -70,8 +70,14 @@ Vibe Code Scanner is designed to run in Docker, with a simple setup process:
 
 1. **Run the Docker container**:
    ```bash
-   docker run -p 7654:7654 vibe-code-scanner-mcp
+   docker run -p 7654:7654 -v "/path/to/your/projects:/code" vibe-code-scanner-mcp
    ```
+   
+   Replace "/path/to/your/projects" with the path to the directory containing your projects:
+   - Windows: `docker run -p 7654:7654 -v "C:/Users/YourName/Projects:/code" vibe-code-scanner-mcp`
+   - Mac/Linux: `docker run -p 7654:7654 -v "/Users/YourName/Projects:/code" vibe-code-scanner-mcp`
+
+   > **Important:** The `-v` flag mounts your local directory into the Docker container. This is necessary because the MCP server running inside Docker can only access files inside the container.
 
 2. **Keep this terminal window open**:
    - The server needs to keep running while you use your AI assistant
@@ -113,6 +119,8 @@ Now you can ask your AI assistant to scan your code with commands like:
 - "Analyze this JavaScript code for issues"
 - "Scan the GitHub repository at https://github.com/username/repository"
 
+> **Important:** When asking the AI assistant to scan a local project, make sure to use the path as it appears inside the Docker container. For example, if your project is at `C:/Users/YourName/Projects/my-website` on your computer, and you mounted it as shown in Step 4, you would ask the AI to scan `/code/my-website`.
+
 The AI assistant will use the MCP server to run the scan and interpret the results for you.
 
 ## Scanning GitHub Repositories
@@ -123,11 +131,103 @@ You can scan GitHub repositories directly without cloning them manually:
 Scan the GitHub repository at https://github.com/username/repository
 ```
 
-For private repositories, you'll need to provide a GitHub personal access token:
+### Scanning Private Repositories
+
+To scan private repositories, you'll need to create a GitHub personal access token:
+
+1. **Create a GitHub Personal Access Token**:
+   - Go to [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens)
+   - Click "Generate new token" (classic)
+   - Give your token a descriptive name (e.g., "Vibe Code Scanner")
+   - Select the following scopes:
+     - `repo` (Full control of private repositories)
+   - Click "Generate token"
+   - **IMPORTANT**: Copy your token immediately and store it securely. GitHub will only show it once!
+
+2. **Use the Token for Scanning**:
+   ```
+   Scan the private GitHub repository at https://github.com/username/repository using token YOUR_GITHUB_TOKEN
+   ```
+
+   Replace `YOUR_GITHUB_TOKEN` with the token you created.
+
+### Scanning Specific Branches
+
+You can scan a specific branch of a repository:
 
 ```
-Scan the private GitHub repository at https://github.com/username/repository using token YOUR_GITHUB_TOKEN
+Scan the GitHub repository at https://github.com/username/repository branch develop
 ```
+
+Or combine with a token for private repositories:
+
+```
+Scan the private GitHub repository at https://github.com/username/repository branch develop using token YOUR_GITHUB_TOKEN
+```
+
+### How GitHub Scanning Works
+
+When you scan a GitHub repository:
+
+1. The scanner clones the repository to a temporary directory
+2. It performs the scan on the cloned code
+3. It generates reports with the scan results
+4. It automatically cleans up the temporary directory when done
+
+This allows you to scan any GitHub repository without manually downloading or cloning it first.
+
+## Testing with Example Apps
+
+The Vibe Code Scanner includes several example apps in the `test-apps` directory that you can use to test the scanner. These apps contain intentional security and code quality issues that the scanner is designed to detect.
+
+### JavaScript Test App
+
+To scan the JavaScript test app:
+
+```
+Scan the project at /code/VibeCodeScanner/test-apps/js-test-app
+```
+
+This will find issues like:
+- Unused variables
+- Console statements (which should be removed in production)
+- Hardcoded API keys and passwords
+
+### TypeScript Test App
+
+To scan the TypeScript test app:
+
+```
+Scan the project at /code/VibeCodeScanner/test-apps/typescript-test-app
+```
+
+This will find issues like:
+- Type errors
+- Syntax problems
+- Security vulnerabilities in TypeScript code
+
+### Python Test App
+
+To scan the Python test app:
+
+```
+Scan the project at /code/VibeCodeScanner/test-apps/python-test-app
+```
+
+This will find issues like:
+- PEP 8 style violations
+- Security vulnerabilities detected by Bandit
+- Unused imports and variables
+
+### Understanding Scan Results
+
+After scanning a test app, you can ask your AI assistant to explain the issues that were found. For example:
+
+```
+What security issues were found in the JavaScript test app?
+```
+
+The AI assistant will interpret the scan results and provide explanations and recommendations for fixing the issues.
 
 ## Troubleshooting
 
