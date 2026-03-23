@@ -1,0 +1,80 @@
+rules:
+  - id: supabase.hardcoded-anon-key
+    patterns:
+      - pattern: createClient($URL, "eyJ...")
+    message: >-
+      Hardcoded Supabase anon key detected. While anon keys are designed to be
+      public, hardcoding them makes rotation difficult. Use an environment
+      variable instead: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    languages: [javascript, typescript]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe:
+        - "CWE-798: Use of Hard-coded Credentials"
+      confidence: MEDIUM
+
+  - id: supabase.service-role-key-in-client
+    patterns:
+      - pattern-either:
+          - pattern: createClient($URL, $KEY)
+          - pattern: createClient($URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+      - metavariable-pattern:
+          metavariable: $KEY
+          pattern: |
+            "eyJ..."
+      - pattern-not: createClient($URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+    message: >-
+      Possible Supabase service role key used in client-side code. Service role
+      keys bypass Row Level Security and should never be exposed to the browser.
+      Use the anon key for client-side code.
+    languages: [javascript, typescript]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe:
+        - "CWE-798: Use of Hard-coded Credentials"
+      confidence: MEDIUM
+
+  - id: supabase.missing-rls-filter
+    patterns:
+      - pattern: $CLIENT.from($TABLE).select(...)
+      - pattern-not: $CLIENT.from($TABLE).select(...).eq(...)
+      - pattern-not: $CLIENT.from($TABLE).select(...).filter(...)
+      - pattern-not: $CLIENT.from($TABLE).select(...).match(...)
+    message: >-
+      Supabase query without any filter. If Row Level Security is not enabled on
+      this table, this will return all rows. Add a filter or ensure RLS is
+      configured.
+    languages: [javascript, typescript]
+    severity: WARNING
+    metadata:
+      category: security
+      confidence: LOW
+
+  - id: supabase.insert-without-user-id
+    patterns:
+      - pattern: $CLIENT.from($TABLE).insert($DATA)
+      - pattern-not-inside: |
+          ... user_id ...
+    message: >-
+      Supabase insert without explicit user_id field. If RLS policies require
+      user ownership, this insert may fail or create orphaned records.
+    languages: [javascript, typescript]
+    severity: INFO
+    metadata:
+      category: security
+      confidence: LOW
+
+  - id: supabase.env-key-in-source
+    pattern-regex: "(SUPABASE_SERVICE_ROLE_KEY|supabase_service_role_key)\\s*[=:]\\s*['\"]eyJ[A-Za-z0-9+/=]+"
+    message: >-
+      Supabase service role key found in source code. This key bypasses Row
+      Level Security. Remove it from source and use environment variables.
+    languages: [generic]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe:
+        - "CWE-798: Use of Hard-coded Credentials"
+      confidence: HIGH

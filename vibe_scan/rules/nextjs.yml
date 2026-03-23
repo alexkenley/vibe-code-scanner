@@ -1,0 +1,81 @@
+rules:
+  - id: nextjs.api-route-no-method-check
+    patterns:
+      - pattern: |
+          export default function $HANDLER($REQ, $RES) {
+            ...
+          }
+      - pattern-not: |
+          export default function $HANDLER($REQ, $RES) {
+            ...
+            $REQ.method
+            ...
+          }
+    paths:
+      include:
+        - "pages/api/**"
+        - "src/pages/api/**"
+    message: >-
+      Next.js API route without HTTP method check. This handler responds to all
+      methods (GET, POST, DELETE, etc). Check req.method to restrict allowed
+      methods.
+    languages: [javascript, typescript]
+    severity: WARNING
+    metadata:
+      category: security
+      confidence: MEDIUM
+
+  - id: nextjs.dangerouslySetInnerHTML
+    pattern: dangerouslySetInnerHTML={{__html: $EXPR}}
+    message: >-
+      Use of dangerouslySetInnerHTML detected. This can lead to XSS
+      vulnerabilities if the HTML content is not properly sanitized. Use a
+      sanitization library like DOMPurify.
+    languages: [javascript, typescript]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe:
+        - "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+      confidence: MEDIUM
+
+  - id: nextjs.exposed-env-in-client
+    pattern-regex: "process\\.env\\.((?!NEXT_PUBLIC_)[A-Z_]+)"
+    paths:
+      include:
+        - "components/**"
+        - "pages/**"
+        - "app/**"
+        - "src/components/**"
+        - "src/pages/**"
+        - "src/app/**"
+      exclude:
+        - "pages/api/**"
+        - "src/pages/api/**"
+        - "app/api/**"
+        - "src/app/api/**"
+    message: >-
+      Server-side environment variable accessed in client component. In Next.js,
+      only variables prefixed with NEXT_PUBLIC_ are available in the browser.
+      This will be undefined at runtime or may accidentally expose secrets
+      during SSR.
+    languages: [javascript, typescript]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe:
+        - "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+      confidence: LOW
+
+  - id: nextjs.cors-allow-all
+    pattern-regex: "Access-Control-Allow-Origin['\"]\\s*[:,]\\s*['\"]\\*['\"]"
+    message: >-
+      CORS header allows all origins (*). This permits any website to make
+      requests to your API. Restrict to specific trusted origins in production.
+    languages: [javascript, typescript]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe:
+        - "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+      confidence: HIGH
