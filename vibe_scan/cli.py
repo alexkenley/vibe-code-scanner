@@ -44,9 +44,25 @@ def main(ctx, target, output, output_format, severity, skip_semgrep, skip_gitlea
         vibe-scan ./my-project        Scan a specific directory
         vibe-scan --github https://github.com/user/repo
     """
+    # Store options on context for potential subcommand use
+    ctx.ensure_object(dict)
+    ctx.obj["target"] = target
+    ctx.obj["options_kwargs"] = dict(
+        output=output, output_format=output_format, severity=severity,
+        skip_semgrep=skip_semgrep, skip_gitleaks=skip_gitleaks,
+        skip_trivy=skip_trivy, github_url=github_url, branch=branch, token=token,
+    )
+
     if ctx.invoked_subcommand is not None:
         return
 
+    _run_scan(target, output, output_format, severity, skip_semgrep,
+              skip_gitleaks, skip_trivy, github_url, branch, token)
+
+
+def _run_scan(target, output, output_format, severity, skip_semgrep,
+              skip_gitleaks, skip_trivy, github_url, branch, token):
+    """Execute the scan with the given options."""
     from pathlib import Path
     from vibe_scan.scanner import Scanner, ScanOptions
 
