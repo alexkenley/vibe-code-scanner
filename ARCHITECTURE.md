@@ -1,157 +1,369 @@
-# Vibe Code Scanner Architecture
+# Vibe Scan v2 Architecture
 
 ## Overview
 
-Vibe Code Scanner is designed as a command-line Python script (`scan.py`) intended to be run locally by developers to identify code quality and security issues in their projects.
+Vibe Scan is a lightweight, pip-installable security scanner for AI-generated ("vibe coded") applications. It wraps three best-in-class open-source tools behind a single CLI, producing AI-ready fix prompts that can be pasted directly into Cursor, Claude, or Copilot.
 
-## Docker-Based Execution Model
+```
+pip install vibe-scan
+vibe-scan ./my-project
+```
 
-**Important:** Vibe Code Scanner is designed to be run within a Docker container, not directly on the host system. This design choice ensures:
+No Docker required. Works natively on WSL, macOS, and Linux.
 
-1. **Consistent Environment:** All required tools and dependencies are pre-installed in the container.
-2. **No Local Tool Installation:** Users don't need to install language-specific tools on their machines.
-3. **Cross-Platform Compatibility:** Works the same way across Windows, macOS, and Linux.
-4. **Isolation:** Scanning operations run in an isolated environment.
+## Design Principles
 
-The workflow is:
-1. Build the Docker image using the provided Dockerfile
-2. Run the scanner by mounting the target code directory into the container
-3. View the generated reports in the target directory
+1. **Zero-friction setup** -- `pip install` and go. No Docker, no Node.js, no language runtimes.
+2. **Best tools, not custom tools** -- wrap Semgrep, Gitleaks, and Trivy rather than reinventing analysis.
+3. **AI-in-the-loop** -- output is designed to be consumed by AI assistants, not just humans.
+4. **Polyglot by default** -- Semgrep covers 30+ languages with one install. No per-language tool setup.
 
-Direct execution of `scan.py` on the host system is not recommended and will likely fail due to missing dependencies.
+## Core Tools
 
-## Guiding Principle: Simplicity ("Follow the Bouncing Ball")
+| Tool | Purpose | Replaces (v1) | Install Method |
+|------|---------|---------------|----------------|
+| **Semgrep** | SAST -- security, code quality, secrets via rules | ESLint, flake8, bandit, rubocop, brakeman, golangci-lint, gosec | pip dependency |
+| **Gitleaks** | Dedicated secret/credential detection | Custom checks | Auto-downloaded binary |
+| **Trivy** | Dependency vulnerabilities, misconfigurations, license scanning | RetireJS, license_scanner.py | Auto-downloaded binary |
 
-**Target Audience:** Developers with less coding experience (e.g., designers who code, "vibe coders").
-**Core Goal:** Make code quality and security scanning accessible and easy.
-**Implications:**
-    *   **Minimal Setup:** Keep dependencies and configuration straightforward.
-    *   **Simple Execution:** Single command execution.
-    *   **Clear, Jargon-Free Reporting:** Explain findings in plain language.
-    *   **Focus:** Prioritize common, high-impact best practice and security issues.
-    *   **Actionable Output:** The report should clearly guide the user on potential next steps (e.g., using the report with an IDE AI assistant).
+### Why These Tools
 
-## Core Components
+- **Semgrep** replaces 7 language-specific tools with a single engine. One rule syntax works across Python, JavaScript, TypeScript, Go, Ruby, Java, Rust, and more. It has curated rulesets for OWASP Top 10, secrets, and framework-specific patterns (Next.js, Django, Rails, Express).
+- **Gitleaks** is the industry standard for secret detection. 150+ built-in rules covering AWS keys, Supabase JWTs, Stripe tokens, and more. Single Go binary, no dependencies.
+- **Trivy** handles dependency scanning (CVEs in npm, pip, gem, go.mod, etc.), IaC misconfiguration detection, and license compliance -- replacing both RetireJS and the custom license scanner.
 
-1.  **Command-Line Interface (CLI):**
-    *   Uses Python's `argparse` module to accept the target project directory path and optional language specification.
-    *   Provides helpful examples and guidance in the help text.
-    *   Supports scanning GitHub repositories directly with the `--github` flag.
+## Package Structure
 
-2.  **Language Detection Module:**
-    *   A function within `scan.py` that analyzes the target directory's contents to determine the primary language.
-    *   Detects languages based on file extensions and configuration files (e.g., `package.json`, `requirements.txt`, `tsconfig.json`).
-    *   Supports Python, JavaScript, TypeScript, Go, and Ruby.
-    *   Prioritizes user-specified language over auto-detection.
-
-3.  **GitHub Repository Cloning:**
-    *   Clones specified GitHub repositories to temporary directories.
-    *   Supports cloning specific branches with the `-b` flag.
-    *   Handles authentication for private repositories using personal access tokens.
-    *   Automatically cleans up temporary directories after scanning.
-    *   Handles errors gracefully with appropriate user feedback.
-
-4.  **Prerequisite Checker:**
-    *   Checks if required tools are installed before attempting to run them.
-    *   Provides clear, actionable feedback when tools are missing.
-    *   Directs users to the README for installation instructions.
-    *   Uses `shutil.which()` to verify tool availability in the system PATH.
-
-5.  **Static Analysis Tool Runner:**
-    *   Uses Python's `subprocess` module to execute language-specific static analysis tools.
-    *   Captures stdout, stderr, and return codes from each tool.
-    *   Handles tool execution errors gracefully.
-    *   Supported tools:
-        *   **Python:** Flake8, Bandit
-        *   **JavaScript/TypeScript:** ESLint (via npx)
-        *   **Go:** golangci-lint, gosec
-        *   **Ruby:** RuboCop (for code quality), Brakeman (for Rails security scanning)
-
-6.  **Output Parsers:**
-    *   Dedicated parser functions for each tool's output format.
-    *   Handles both plain text and JSON output formats.
-    *   Normalizes tool-specific output into a consistent issue format.
-    *   Includes robust error handling for parsing failures.
-    *   **Note:** While parsers are still included for backward compatibility, the primary approach now focuses on preserving raw tool outputs.
-
-7.  **Report Generator:**
-    *   Saves raw tool outputs to individual files for detailed analysis.
-    *   Creates a JSON report with file references for AI assistant integration.
-    *   Includes a summary of tool execution status.
-    *   Provides links to documentation for fixing identified issues.
-    *   Handles edge cases like missing tools or empty results.
-    *   Focuses on preserving complete, unmodified tool outputs for maximum utility.
+```
+pyproject.toml                  # Build config, dependencies, entry points
+vibe_scan/
+  __init__.py                   # Package version
+  cli.py                        # Click CLI: vibe-scan command + subcommands
+  scanner.py                    # Orchestrator: runs tools, merges results, deduplicates
+  language.py                   # Project detection: languages, frameworks, package managers
+  binary_manager.py             # Auto-download/cache Gitleaks and Trivy binaries
+  report.py                     # JSON report + AI fix-prompts.md + terminal summary
+  mcp_server.py                 # FastAPI MCP server (optional dependency)
+  tools/
+    __init__.py                 # Finding dataclass, Severity/Category enums, ToolResult
+    semgrep.py                  # Semgrep CLI wrapper with ruleset selection
+    gitleaks.py                 # Gitleaks wrapper
+    trivy.py                    # Trivy wrapper
+  rules/
+    supabase.yml                # Custom Semgrep rules for Supabase patterns
+    nextjs.yml                  # Custom Semgrep rules for Next.js patterns
+tests/
+  conftest.py                   # Fixtures: paths to test-apps
+  test_language.py
+  test_scanner.py
+  test_binary_manager.py
+  test_report.py
+test-apps/                      # 9 intentionally-vulnerable apps for validation
+```
 
 ## Data Flow
 
-1.  User executes one of the following:
-    *   `python scan.py <project_path> [-l language]` to scan a local directory
-    *   `python scan.py --github <repo_url> [-b branch]` to scan a GitHub repository
-    *   `python scan.py --github <repo_url> --token <token>` to scan a private GitHub repository
-2.  If a GitHub repository is specified:
-    *   The script clones the repository to a temporary directory
-    *   For private repositories, it uses the provided token for authentication
-    *   The temporary directory is used as the project path for scanning
-3.  The script validates the project path and detects or uses the specified language.
-4.  For each applicable tool:
-    *   Checks if the tool is installed and provides feedback if not.
-    *   Executes the tool and captures its output.
-    *   Saves the raw output to a dedicated file (`raw_<tool>_output.txt`).
-5.  A JSON report is generated with:
-    *   Tool execution summary
-    *   References to raw output files
-    *   Resource links
-6.  The reports are written to the `reports` directory in the target project:
-    *   `vibe_scan_report.json` - JSON report for AI assistants
-    *   `raw_<tool>_output.txt` - Raw tool outputs for detailed analysis
-7.  If a GitHub repository was cloned, the temporary directory is cleaned up.
+```
+User runs: vibe-scan ./my-project
+                |
+                v
+        +-------+--------+
+        |   cli.py        |   Parse args, resolve target path
+        +-------+--------+
+                |
+                v
+        +-------+--------+
+        |  language.py    |   Walk file tree, detect languages + frameworks
+        |                 |   Returns: ProjectInfo(languages, frameworks, ...)
+        +-------+--------+
+                |
+                v
+        +-------+--------+
+        |  scanner.py     |   Orchestrate tool execution
+        |  (orchestrator) |
+        +---+---+---+----+
+            |   |   |
+            v   v   v
+     Semgrep  Gitleaks  Trivy      (run in sequence, each ~2-10s)
+            |   |   |
+            v   v   v
+        +-------+--------+
+        | scanner.py      |   Merge findings, deduplicate, sort by severity
+        | (merge/dedup)   |   Generate fix_prompt for each finding
+        +-------+--------+
+                |
+                v
+        +-------+--------+
+        |  report.py      |   Write JSON report
+        |                 |   Write fix-prompts.md (AI-ready)
+        |                 |   Print rich terminal summary
+        +----------------+
+```
 
-## Error Handling
+## Key Components
 
-1.  **Missing Prerequisites:**
-    *   Clearly identifies missing tools with specific installation instructions.
-    *   Continues execution with available tools rather than failing completely.
+### CLI (`cli.py`)
 
-2.  **Tool Execution Errors:**
-    *   Captures and reports non-zero exit codes and stderr output.
-    *   Distinguishes between "successful with issues found" and "execution failure" cases.
+Built with Click. Entry point registered as `vibe-scan` console script.
 
-3.  **Parsing Errors:**
-    *   Handles malformed tool output gracefully.
-    *   Provides debugging information for troubleshooting.
+```
+vibe-scan [TARGET] [OPTIONS]
 
-4.  **Report Generation Errors:**
-    *   Catches and reports file I/O errors.
-    *   Ensures the user is informed if report generation fails.
+Arguments:
+  TARGET              Path to scan (default: current directory)
 
-## Security Considerations
+Options:
+  -o, --output DIR    Output directory (default: ./reports)
+  -f, --format FMT    Output format: json, markdown, both (default: both)
+  -s, --severity LVL  Minimum severity to report (default: low)
+  --skip-semgrep      Skip SAST scan
+  --skip-gitleaks     Skip secret detection
+  --skip-trivy        Skip dependency scanning
+  --github URL        Clone and scan a GitHub repo
+  -b, --branch NAME   Branch to clone (with --github)
+  --token TOKEN       GitHub token for private repos
 
-*   When using GitHub personal access tokens, the token is never logged or displayed in error messages.
-*   Temporary directories are securely created and properly cleaned up after scanning.
-*   The scanner does not store or transmit any GitHub credentials.
-*   Users should follow GitHub's best practices for token management, including:
-    *   Using tokens with minimal required permissions (repo scope is sufficient)
-    *   Regularly rotating tokens
-    *   Not sharing tokens in public repositories or discussions
+Subcommands:
+  vibe-scan tools          Show installed tool versions and status
+  vibe-scan update-tools   Force re-download of Gitleaks/Trivy
+```
+
+### Language Detection (`language.py`)
+
+Returns a `ProjectInfo` dataclass describing the project:
+
+```python
+@dataclass
+class ProjectInfo:
+    path: Path
+    languages: list[str]        # ["python", "javascript", "typescript"]
+    frameworks: list[str]       # ["nextjs", "supabase"]
+    package_managers: list[str] # ["npm", "pip"]
+    has_dockerfile: bool
+    has_git: bool
+```
+
+Key differences from v1:
+- Returns ALL detected languages (Semgrep is polyglot, no need to pick one)
+- "nextjs" and "node" are frameworks, not languages
+- Respects `.gitignore` and common exclusion patterns
+
+### Binary Manager (`binary_manager.py`)
+
+Handles auto-downloading Gitleaks and Trivy on first run.
+
+**Resolution order:**
+1. Check environment variable override (`VIBE_SCAN_GITLEAKS_PATH`)
+2. Check system PATH (`shutil.which()`)
+3. Check local cache (`~/.cache/vibe-scan/bin/`)
+4. Download from GitHub Releases, extract, cache, make executable
+
+**Platform detection:** `platform.system()` + `platform.machine()` mapped to release asset names.
+
+**Version pinning:** Hardcoded versions as constants, overridable via `VIBE_SCAN_GITLEAKS_VERSION` / `VIBE_SCAN_TRIVY_VERSION` environment variables.
+
+**Cache layout:**
+```
+~/.cache/vibe-scan/bin/
+  gitleaks-8.18.2
+  trivy-0.50.1
+```
+
+**First-run UX:**
+```
+Downloading gitleaks v8.18.2 for linux/x86_64... [################] 100%
+Cached at ~/.cache/vibe-scan/bin/gitleaks-8.18.2
+```
+
+### Tool Wrappers (`tools/`)
+
+Each wrapper follows the same interface:
+
+```python
+class SemgrepScanner:
+    def scan(self, target: Path, project_info: ProjectInfo) -> ToolResult: ...
+
+class GitleaksScanner:
+    def __init__(self, binary_manager: BinaryManager): ...
+    def scan(self, target: Path) -> ToolResult: ...
+
+class TrivyScanner:
+    def __init__(self, binary_manager: BinaryManager): ...
+    def scan(self, target: Path) -> ToolResult: ...
+```
+
+Each returns a `ToolResult` containing a list of `Finding` objects:
+
+```python
+@dataclass
+class Finding:
+    tool: str              # "semgrep", "gitleaks", "trivy"
+    rule_id: str           # e.g. "python.lang.security.audit.exec-detected"
+    category: Category     # SECURITY, CODE_QUALITY, DEPENDENCY, SECRET, LICENSE, MISCONFIGURATION
+    severity: Severity     # CRITICAL, HIGH, MEDIUM, LOW, INFO
+    confidence: str        # "high", "medium", "low"
+    file: str
+    line_start: int
+    line_end: int
+    column_start: int
+    column_end: int
+    message: str
+    code_snippet: str
+    cwe: list[str]         # ["CWE-95"]
+    owasp: list[str]       # ["A03:2021"]
+    fix_prompt: str        # AI-ready fix prompt (generated post-scan)
+    references: list[str]
+```
+
+### Semgrep Rulesets
+
+Rulesets are selected dynamically based on detected languages and frameworks:
+
+| Always enabled | Per-language | Per-framework |
+|---------------|-------------|---------------|
+| `p/security-audit` | `p/python` | `p/nextjs` |
+| `p/owasp-top-ten` | `p/javascript` | `p/django` |
+| `p/secrets` | `p/typescript` | `p/flask` |
+| | `p/golang` | `p/expressjs` |
+| | `p/ruby` | `p/react` |
+| | `p/java` | `p/ruby` (Rails) |
+
+Custom rules in `vibe_scan/rules/` are always loaded (Supabase patterns, Next.js API route checks, etc.).
+
+### Report Generation (`report.py`)
+
+Produces three outputs:
+
+**1. JSON Report** (`reports/vibe-scan-report.json`)
+```json
+{
+  "version": "0.3.0",
+  "scan_metadata": {
+    "timestamp": "2026-03-23T10:30:00Z",
+    "target": "/path/to/project",
+    "languages_detected": ["javascript", "typescript"],
+    "duration_seconds": 5.4,
+    "tools_executed": { ... }
+  },
+  "summary": {
+    "total_findings": 15,
+    "by_severity": {"critical": 1, "high": 3, "medium": 7, "low": 4},
+    "by_tool": {"semgrep": 10, "gitleaks": 2, "trivy": 3},
+    "by_category": {"security": 8, "code-quality": 4, "dependency": 3}
+  },
+  "findings": [ ... ]
+}
+```
+
+**2. AI Fix Prompts** (`reports/fix-prompts.md`)
+
+A single markdown file designed to be pasted into an AI assistant:
+
+```markdown
+# Vibe Scan Fix Prompts
+
+Copy this file into Cursor, Claude, or Copilot and ask:
+**"Fix all the security issues listed below."**
+
+---
+
+## Issue 1: Hardcoded Secret Detected [HIGH]
+**File:** lib/supabase.js (line 5)
+**Rule:** generic.secrets.security.detected-jwt-token
+
+### What was found
+A hardcoded JWT token was detected in the source code.
+
+### Suggested fix
+Move this secret to an environment variable and add .env to .gitignore.
+
+---
+(... more issues ...)
+```
+
+**3. Terminal Summary** (via `rich`)
+```
+Vibe Scan Results -- ./my-project
+-------------------------------------
+ Tool       Status  Findings  Time
+-------------------------------------
+ Semgrep      ok      10      3.2s
+ Gitleaks     ok       2      0.8s
+ Trivy        ok       3      1.4s
+-------------------------------------
+ Total                15      5.4s
+
+ By severity: 1 critical, 3 high, 7 medium, 4 low
+
+ Reports saved to: ./reports/
+```
+
+### MCP Server (`mcp_server.py`)
+
+Optional install: `pip install vibe-scan[mcp]`
+
+Single FastAPI server implementing MCP protocol (JSON-RPC 2.0 over SSE + HTTP). Replaces the 8 server implementations from v1.
+
+**Tools exposed:**
+- `scan_project(path, options)` -- trigger a scan, returns scan_id
+- `get_scan_status(scan_id)` -- poll status
+- `get_results(scan_id)` -- retrieve findings + fix prompts
+
+**Entry point:** `vibe-scan-mcp` console script (or `python -m vibe_scan.mcp_server`)
 
 ## Dependencies
 
-*   **Core:** Python 3.x with standard library modules (argparse, os, subprocess, json, re, datetime, shutil, sys)
-*   **External CLI tools:** (installed separately by the user)
-    *   **Python:** flake8, bandit
-    *   **JavaScript/TypeScript:** Node.js with npx (for ESLint)
-    *   **Go:** golangci-lint, gosec
-    *   **Ruby:** rubocop, brakeman (requires Rails application)
+### Required (pip)
+- `semgrep >= 1.56.0` -- SAST engine
+- `click >= 8.1.0` -- CLI framework
+- `rich >= 13.0.0` -- Terminal output (tables, progress bars, colors)
+- `pydantic >= 2.0.0` -- Data validation
 
-## Future Considerations
+### Optional (`pip install vibe-scan[mcp]`)
+- `fastapi >= 0.104.0`
+- `uvicorn[standard] >= 0.24.0`
+- `sse-starlette >= 1.6.0`
 
-*   Configuration file for customizing tool settings and rule sets.
-*   Support for additional GitHub features like:
-    *   SSH key authentication
-    *   Webhook integration for CI/CD pipelines
-    *   GitHub Actions integration
-*   Additional output formats (HTML, IDE-specific).
-*   Automatic installation of missing tools.
-*   Support for additional languages and frameworks.
-*   Integration with CI/CD pipelines.
-*   Custom rule definitions for project-specific standards.
+### External (auto-downloaded)
+- Gitleaks (Go binary, ~15MB)
+- Trivy (Go binary, ~50MB)
+
+### Development (`pip install vibe-scan[dev]`)
+- `pytest >= 7.0.0`
+- `pytest-cov >= 4.0.0`
+
+## Docker (Optional)
+
+For CI/CD or users who prefer containers:
+
+```dockerfile
+FROM python:3.11-slim
+RUN pip install vibe-scan
+ENTRYPOINT ["vibe-scan"]
+```
+
+Gitleaks and Trivy are auto-downloaded on first container run and cached in the image layer if the image is committed.
+
+## Comparison with v1
+
+| Aspect | v1 | v2 |
+|--------|----|----|
+| Install | Docker build (~5 min) | `pip install vibe-scan` |
+| Tools | 7+ language-specific (ESLint, flake8, bandit...) | 3 polyglot (Semgrep, Gitleaks, Trivy) |
+| Languages | 5 (Python, JS, TS, Go, Ruby) | 30+ (via Semgrep) |
+| Secret detection | Heuristic checks | Gitleaks (150+ rules) |
+| Dependency scanning | RetireJS (JS only) | Trivy (all ecosystems) |
+| License scanning | Custom Python module | Trivy |
+| Output | JSON report | JSON + AI fix prompts + rich terminal |
+| MCP servers | 8 implementations | 1 clean FastAPI server |
+| Docker required | Yes | No (optional) |
+| scan.py size | 1,535 lines | ~200 lines (scanner.py orchestrator) |
+
+## Security Considerations
+
+- Gitleaks/Trivy binaries are downloaded over HTTPS from official GitHub Releases
+- SHA256 checksum verification on downloaded binaries
+- MCP server binds to `127.0.0.1` only by default
+- GitHub tokens passed via `--token` are never logged or written to reports
+- Semgrep runs with `--metrics off` by default (no telemetry)
+- Temporary directories for GitHub clones are cleaned up in a `finally` block
