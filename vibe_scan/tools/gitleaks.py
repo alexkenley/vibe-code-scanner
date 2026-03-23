@@ -1,0 +1,1 @@
+"""Gitleaks secret detection wrapper."""

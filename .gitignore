@@ -28,6 +28,15 @@ Thumbs.db
 # Generated tool output files
 -
 */-
-*/*/- 
+*/*/-
 *.log
 .eslintcache
+
+# Virtual environment
+.venv/
+venv/
+
+# Build artifacts
+dist/
+*.egg-info/
+build/
